@@ -2,7 +2,7 @@
 
 A simple, standalone tool to compare the relative performance of Indian Mutual Funds.
 
-### 🔗 [Click Here to Open the App](https://YOUR-APP-URL.streamlit.app)
+### 🔗 [Click Here to Open the App](https://fund-comparator-my-fund-tool.streamlit.app/)
 
 ## 🧐 What does it do?
 It fetches live NAV data from AMFI and plots a "Rebased to 100" chart. This allows you to compare funds (like an Equity fund vs. a Debt fund) on a level playing field to see how ₹100 invested in each would have grown over time.
