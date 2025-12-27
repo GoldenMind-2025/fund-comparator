@@ -19,6 +19,42 @@ AMFI_BASE_URL = "https://api.mfapi.in/mf"
 # The file you need to copy into the folder
 REGISTRY_FILENAME = "scheme_registry.json" 
 
+# --- Custom Styling ---
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+    .main {
+        background-color: #fcfcfc;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #eee;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    div[data-testid="stExpander"] {
+        border: 1px solid #f0f0f0;
+        border-radius: 12px;
+        background-color: white;
+        margin-bottom: 20px;
+    }
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    .stButton>button:hover {
+        border-color: #4CAF50;
+        color: #4CAF50;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # ==============================================================================
 # 2. DATA ENGINE (Cloud-Ready, Memory Caching)
 # ==============================================================================
@@ -100,6 +136,33 @@ def get_nav_history(amfi_code):
     return pd.DataFrame()
 
 
+def calculate_metrics(df, label):
+    """Calculates CAGR and Total Return for a given NAV history DataFrame."""
+    if df.empty or len(df) < 2:
+        return None
+    
+    start_val = df.iloc[0]["nav"]
+    end_val = df.iloc[-1]["nav"]
+    total_return = (end_val - start_val) / start_val * 100
+    
+    # CAGR calculation
+    start_date = df.iloc[0]["date"]
+    end_date = df.iloc[-1]["date"]
+    days = (end_date - start_date).days
+    years = days / 365.25 if days > 0 else 0
+    
+    cagr = ((end_val / start_val) ** (1 / years) - 1) * 100 if years > 0 else 0
+    
+    return {
+        "Fund": label,
+        "Total Return (%)": f"{total_return:.2f}%",
+        "CAGR (%)": f"{cagr:.2f}%" if years >= 0.9 else "N/A",
+        "Duration": f"{years:.1f} Yrs",
+        "Start NAV": f"{start_val:.2f}",
+        "End NAV": f"{end_val:.2f}"
+    }
+
+
 # ==============================================================================
 # 3. UI: SIDEBAR (Credits & Settings)
 # ==============================================================================
@@ -133,7 +196,7 @@ with st.sidebar:
 # 4. UI: MAIN PAGE (Instructions & App)
 # ==============================================================================
 
-st.title("⚖️ Compare Mutual Funds")
+st.subheader("⚖️ Compare Mutual Funds")
 
 # --- Instructions (Collapsible) ---
 with st.expander("ℹ️  **First time user? Click to read the Quick Guide**", expanded=True):
@@ -145,8 +208,8 @@ with st.expander("ℹ️  **First time user? Click to read the Quick Guide**", e
     4.  **Analyze** the chart. The graph starts at **100** on the start date, so you can easily compare relative growth.
     5.  You can also add funds that you cannot find in the drop down by adding fund's ISIN code in the Guest Box
     6.  This tool helps to compare returns of the funds over the selected time frame.
-    7.  It is also necessary to look at fund metrics such as PE ratio, assests under management (AMU), expense, portfolio, manager, etc.
-    8.  **http://valuereseach.com/ is one source of this information
+    7.  It is also necessary to look at fund metrics such as PE ratio, assests under management (AUM), expense, portfolio, manager, etc.
+    8.  **http://valueresearchonline.com/ is one source of this information
 
     *Share your comments in the guestbook at the end.*
 
@@ -188,14 +251,14 @@ with col_fund:
 with col_btn:
     st.write("") # Alignment spacer
     st.write("")
-    if st.button("➕ Add", use_container_width=True):
+    if st.button("➕ Add Fund", use_container_width=True, type="primary"):
         count = 0
         for fund in funds_to_add:
             if fund not in st.session_state["compare_basket"]:
                 st.session_state["compare_basket"].append(fund)
                 count += 1
         if count > 0:
-            st.success(f"+{count}")
+            st.toast(f"Added {count} fund(s)!", icon="✅")
 
 # --- B. Active List ---
 if st.session_state["compare_basket"]:
@@ -308,31 +371,51 @@ if final_targets:
             yaxis_title="Growth (Starts at 100)",
             template="plotly_white",
             hovermode="x unified",
-            height=600,
+            height=500,
             legend=dict(
                 orientation="h",
-                y=1.1,
-                xanchor="left",
-                x=0
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5
             ),
-            margin=dict(l=20, r=20, t=80, b=20)
+            margin=dict(l=10, r=10, t=80, b=10)
         )
         st.plotly_chart(fig, use_container_width=True)
+        
+        # --- Metrics Table ---
+        st.markdown("##### 📊 Performance Summary")
+        metrics_list = []
+        for t in final_targets:
+            df_m = get_nav_history(t["code"])
+            if not df_m.empty:
+                # Same filtering as chart
+                months_m = time_map[range_label]
+                end_date_m = df_m["date"].max()
+                if months_m != 999:
+                    start_date_m = end_date_m - pd.DateOffset(months=months_m)
+                    df_m = df_m[df_m["date"] >= start_date_m]
+                
+                m = calculate_metrics(df_m, t["name"])
+                if m:
+                    metrics_list.append(m)
+        
+        if metrics_list:
+            st.dataframe(pd.DataFrame(metrics_list), hide_index=True, use_container_width=True)
     else:
         st.warning("No data found for the selected funds/dates.")
 
 
 ####last section - guestbook - credits
 
-# ==============================================================================
-# 3. UI: SIDEBAR (Credits & Settings)
-# ==============================================================================
 
-# ... (Previous settings code remains the same) ...
+# ==============================================================================
+# 6. FEEDBACK & CREDITS
+# ==============================================================================
 
 # --- GUESTBOOK / FEEDBACK ---
 st.divider()
-st.header("💌 Guestbook")
+st.subheader("💌 Guestbook")
 
 # Create an Expander so it doesn't take up space until clicked
 with st.expander("✍️ Leave a note"):
@@ -351,5 +434,5 @@ st.caption(
     "**Credits**\n\n"
     "Created by [Golden_Mind]\n"
     "Data Source: AMFI (Public API)\n"
-    "Ver: 1.0-17 Dec 25(Standalone)"
+    "Ver: 1.1-19 Dec 25(Standalone)"
 )
